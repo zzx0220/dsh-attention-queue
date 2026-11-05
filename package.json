@@ -1,0 +1,46 @@
+{
+  "name": "dsh-attention-queue",
+  "version": "0.1.0",
+  "description": "Pinned attention queue above the DSH Web session list: which sessions finished unseen, and which still await your reply.",
+  "license": "MIT",
+  "author": "zzx0220",
+  "generatedBy": "DeepSeek Harness (deepseek-flash)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zzx0220/dsh-attention-queue.git"
+  },
+  "homepage": "https://github.com/zzx0220/dsh-attention-queue",
+  "bugs": {
+    "url": "https://github.com/zzx0220/dsh-attention-queue/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "dsh",
+    "deepseek-harness",
+    "sidebar",
+    "notification",
+    "attention-queue"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  }
+}

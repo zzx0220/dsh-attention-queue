@@ -1,0 +1,11 @@
+# attention-queue bundle patch: contributes one browser-roster row (a `dsh.client`
+# entry). The node half (index.js) is an empty apply — the row exists so the host
+# Loader lists the plugin and composes the browser half into window.__DSH_BOOT__;
+# all behaviour lives in client.js (exports["./client"]).
+#
+# `name` below must stay identical to package.json's "name": the loader resolves
+# this row by package name, and a mismatch installs silently without doing anything.
+
+- insert:
+    - id: attention-queue
+      name: 'dsh-attention-queue'
