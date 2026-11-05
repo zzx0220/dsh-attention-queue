@@ -80,13 +80,18 @@ queue and renders it as a single pinned card.
 
 - A session moves from `running` to stopped while you are viewing a different session → enters
   **Unseen**.
-- A `pendingInteraction` appears while you are not viewing that session → enters **Needs reply**
-  directly, which has the highest priority.
+- A `pendingInteraction` appears → enters **Needs reply** directly, which has the highest
+  priority. It outranks `running`: an approval waits *inside* the turn, so the session keeps
+  reporting `running` for as long as it is blocked, and deciding `running` first hides it forever.
+  The session on screen is included too — nothing continues until you answer.
 - Opening an **Unseen** entry keeps the row in the list and changes its subtitle to *viewing*:
   an entry should not disappear while it is being read.
-- Resolution happens after you leave the session. If it is still waiting on an approval, a
-  question or a plan review, it becomes **Needs reply**; otherwise it is removed.
-- When the session runs again (you replied), the entry is removed immediately.
+- Leaving a viewed **Unseen** row removes it; if that session is now waiting on you, it has
+  already become **Needs reply**.
+- When the session runs again after you answered, the **Needs reply** row is removed immediately.
+- An inferred **Needs reply** also disappears once the session stops waiting (including a reload
+  that finds nothing pending); only a row you marked *keep as needs reply* by hand survives until
+  you mark it done. Marking a still-blocked row done keeps it out for that same activity.
 - Hovering a row exposes *keep as needs reply* and *mark done*, which cover the cases automatic
   detection cannot resolve — for example an assistant that asks a question in plain text.
 - On restart, sessions whose `updatedAt` is newer than the last time you left the client, and

@@ -75,11 +75,11 @@ reset();
 { reconcile(list([session('B', { running: true })]), statuses([{ id: 'B', running: true }]), 'C');
   check('reply cleared once it runs', store.entries.B, undefined); }
 
-// 5. Viewed while still blocked: survives the visit, becomes 待回复 on leaving
+// 5. Blocked while on screen still queues as 待回复, and keeps doing so on leaving
 { reconcile(list([session('D', { updatedAt: now + 2000 })]), statuses([{ id: 'D', running: true }]), 'Z');
   reconcile(list([session('D')]), statuses([{ id: 'D', running: false }]), 'Z');
   reconcile(list([session('D')]), statuses([{ id: 'D', running: false, pending: 'approval' }]), 'D');
-  check('blocked row survives the visit', store.entries.D?.state, 'unseen');
+  check('blocked while on screen -> reply', store.entries.D?.state, 'reply');
   reconcile(list([session('D')]), statuses([{ id: 'D', running: false, pending: 'approval' }]), 'Z');
   check('left while blocked -> reply', store.entries.D?.state, 'reply'); }
 
@@ -101,7 +101,50 @@ reset();
   reconcile(list([session('S', { origin: 'subagent' }), session('N', { blank: true })]), statuses([{ id: 'S', running: true }, { id: 'N', running: true }]), 'Z');
   check('subagent/draft ignored', Object.keys(store.entries), []); }
 
-// 9. Both language tables expose the same keys, so neither drifts
+// 9. Regression: an approval waits inside the turn, so `running` is still true.
+//    Pending must outrank it, or the row is erased the moment the turn starts.
+{ reset();
+  const G = session('G');
+  reconcile(list([G]), statuses([{ id: 'G', running: true }]), 'Z');
+  reconcile(list([G]), statuses([{ id: 'G', running: true, pending: 'approval' }]), 'Z');
+  check('pending beats running -> reply', store.entries.G?.state, 'reply');
+  check('pending reason recorded', store.entries.G?.reason, 'approval');
+  reconcile(list([G]), statuses([{ id: 'G', running: true }]), 'Z');
+  check('answering clears the row', store.entries.G, undefined); }
+
+// 10. A row dismissed while still blocked stays dismissed for that interaction
+{ reset();
+  const H = session('H', { updatedAt: now + 3000 });
+  reconcile(list([H]), statuses([{ id: 'H', running: true, pending: 'approval' }]), 'Z');
+  const activeAt = store.entries.H?.activeAt;
+  store.dismissed.H = activeAt;
+  delete store.entries.H;
+  reconcile(list([H]), statuses([{ id: 'H', running: true, pending: 'approval' }]), 'Z');
+  check('dismissed reply is not resurrected', store.entries.H, undefined);
+  // Newer activity means a new interaction, which may queue again.
+  reconcile(list([session('H', { updatedAt: now + 4000 })]), statuses([{ id: 'H', running: true, pending: 'approval' }]), 'Z');
+  check('new activity queues again', store.entries.H?.state, 'reply'); }
+
+// 11. An inferred reply disappears once the interaction is gone; a manual one stays
+{ reset();
+  const I = session('I');
+  reconcile(list([I]), statuses([{ id: 'I', running: true, pending: 'approval' }]), 'Z');
+  check('blocked row queued', store.entries.I?.state, 'reply');
+  // Answered and the turn already ended: the reply is gone; the finished run
+  // now counts as unseen (you were elsewhere, so you never saw the result).
+  reconcile(list([session('I', { updatedAt: now + 5000 })]), statuses([{ id: 'I', running: false }]), 'Z');
+  check('answered idle -> unseen', store.entries.I?.state, 'unseen');
+  check('answered idle clears the reply', store.entries.I?.reason, 'finished');
+  // Reload case: a persisted reply with no live interaction must not linger.
+  store.entries.I = { state: 'reply', since: now, activeAt: now + 5000, title: 'T-I', workspace: '/w/I', reason: 'approval' };
+  reconcile(list([session('I', { updatedAt: now + 5000 })]), statuses([{ id: 'I', running: false }]), 'Z');
+  check('stale reply does not survive a reload', store.entries.I, undefined);
+  // A hand-marked row is the user's own claim and survives idle.
+  store.entries.I = { state: 'reply', since: now, activeAt: now + 5000, title: 'T-I', workspace: '/w/I', reason: 'manual' };
+  reconcile(list([session('I', { updatedAt: now + 5000 })]), statuses([{ id: 'I', running: false }]), 'Z');
+  check('manual reply survives', store.entries.I?.reason, 'manual'); }
+
+// 12. Both language tables expose the same keys, so neither drifts
 {
   reset();
   const { languages } = mod.__internals;

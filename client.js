@@ -287,8 +287,9 @@ window.__ModuleLoader__.load({
     /**
      * Fold the live feeds into the queue. Runs on every sessions/status change:
      *
+     *  - waiting on you       -> needs reply, even while the turn still reports
+     *                            running and even on the session on screen
      *  - running: true        -> the session is working; drop any entry
-     *  - waiting on you       -> needs reply (never for the session on screen)
      *  - running true -> false while elsewhere -> unseen
      *  - the session came on screen unseen -> mark it viewed
      *
@@ -318,6 +319,46 @@ window.__ModuleLoader__.load({
         var entry = store.entries[id];
         var wasRunning = lastRunning[id] === true;
 
+        // A pending interaction freezes the turn: the agent keeps reporting
+        // `running` for as long as it waits for you (the approval audit pair is
+        // turn-enclosed, and the loop derives status from its phase). Deciding
+        // this before the running branch is what makes an approval visible at
+        // all — otherwise the turn's own activity erases the row.
+        if (pendingKind !== undefined) {
+          lastRunning[id] = running;
+          if (entry === undefined) {
+            // A dismissal marks the current activity, so the same interaction
+            // must not resurrect on every status tick: it can keep the turn
+            // blocked for minutes, and re-adding it would fight an explicit
+            // "done". A later interaction bumps updatedAt and queues again.
+            if ((Number(store.dismissed[id]) || 0) >= (Number(session.updatedAt) || 0)) continue;
+            store.entries[id] = makeEntry(session, 'reply', pendingKind, now);
+            dirty = true;
+            announce(session, 'reply');
+          } else if (entry.state !== 'reply' || entry.reason !== pendingKind) {
+            store.entries[id] = {
+              state: 'reply',
+              since: now,
+              activeAt: entry.activeAt,
+              title: entry.title,
+              workspace: entry.workspace,
+              reason: pendingKind,
+            };
+            dirty = true;
+          }
+          continue;
+        }
+
+        // An inferred reply lives only as long as the interaction does: once it
+        // is answered (or a reload finds nothing pending any more) the row has
+        // nothing left to say. A manual mark is the user's own claim, so it
+        // stays until dismissed.
+        if (entry !== undefined && entry.state === 'reply' && entry.reason !== 'manual' && pendingKind === undefined) {
+          delete store.entries[id];
+          dirty = true;
+          entry = undefined;
+        }
+
         if (running) {
           lastRunning[id] = true;
           if (entry !== undefined) {
@@ -335,21 +376,8 @@ window.__ModuleLoader__.load({
         // the whole point — the entry must survive the visit and only resolve
         // once you have moved on to another conversation.
         if (entry !== undefined && entry.viewedAt !== undefined && !isCurrent) {
-          if (pendingKind !== undefined) {
-            store.entries[id] = Object.assign({}, entry, { state: 'reply', reason: pendingKind });
-          } else {
-            delete store.entries[id];
-          }
+          delete store.entries[id];
           dirty = true;
-          continue;
-        }
-
-        if (pendingKind !== undefined && !isCurrent) {
-          if (entry === undefined || entry.state !== 'reply') {
-            store.entries[id] = makeEntry(session, 'reply', pendingKind, now);
-            dirty = true;
-            announce(session, 'reply');
-          }
           continue;
         }
 
